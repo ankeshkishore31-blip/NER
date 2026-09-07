@@ -1,0 +1,86 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "LS_NER_2024_001",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [91.8933, 25.5788, 1496.0]
+      },
+      "properties": {
+        "event_id": "LS_NER_2024_001",
+        "event_date": "2024-06-15T04:30:00+05:30",
+        "state": "Meghalaya",
+        "district": "East Khasi Hills",
+        "highway": "NH-06",
+        "severity": "HIGH",
+        "volume_m3": 12500,
+        "trigger_cause": "HEAVY_MONSOON_RAIN",
+        "road_blocked": true,
+        "blockage_duration_hrs": 36,
+        "soil_type": "Clayey Loam",
+        "lithology": "Interbedded Shale & Sandstone",
+        "slope_deg": 42.5,
+        "aspect_deg": 135.0,
+        "rainfall_3d_antecedent_mm": 185.4
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "LS_NER_2024_002",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [88.6065, 27.3389, 1650.0]
+      },
+      "properties": {
+        "event_id": "LS_NER_2024_002",
+        "event_date": "2024-07-02T11:15:00+05:30",
+        "state": "Sikkim",
+        "district": "Gangtok",
+        "highway": "NH-10",
+        "severity": "CRITICAL",
+        "volume_m3": 45000,
+        "trigger_cause": "CLOUD_BURST_EROSION",
+        "road_blocked": true,
+        "blockage_duration_hrs": 72,
+        "soil_type": "High Plasticity Silt/Clay",
+        "lithology": "Phyllite and Pelitic Schist",
+        "slope_deg": 52.0,
+        "aspect_deg": 225.0,
+        "rainfall_3d_antecedent_mm": 245.0
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "LS_NER_2024_003",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [94.1086, 25.6751, 1444.0]
+      },
+      "properties": {
+        "event_id": "LS_NER_2024_003",
+        "event_date": "2024-07-18T22:45:00+05:30",
+        "state": "Nagaland",
+        "district": "Kohima",
+        "highway": "NH-29",
+        "severity": "HIGH",
+        "volume_m3": 18000,
+        "trigger_cause": "TOE_CUTTING_SLOPE_SATURATION",
+        "road_blocked": true,
+        "blockage_duration_hrs": 48,
+        "soil_type": "Disintegrated Shale Residual Soil",
+        "lithology": "Disang Shale Formation",
+        "slope_deg": 38.0,
+        "aspect_deg": 110.0,
+        "rainfall_3d_antecedent_mm": 172.0
+      }
+    }
+  ]
+}

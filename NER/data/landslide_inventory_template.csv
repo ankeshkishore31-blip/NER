@@ -1,0 +1,6 @@
+event_id,latitude,longitude,elevation_m,event_date,event_time_ist,state,district,highway_code,severity,volume_m3,trigger_cause,fatalities,injuries,road_blocked,blockage_duration_hrs
+LS_NER_2024_001,25.5788,91.8933,1496,2024-06-15,04:30,Meghalaya,East Khasi Hills,NH-06,HIGH,12500,HEAVY_MONSOON_RAIN,2,5,true,36
+LS_NER_2024_002,27.3389,88.6065,1650,2024-07-02,11:15,Sikkim,Gangtok,NH-10,CRITICAL,45000,CLOUD_BURST_EROSION,4,12,true,72
+LS_NER_2024_003,25.6751,94.1086,1444,2024-07-18,22:45,Nagaland,Kohima,NH-29,HIGH,18000,TOE_CUTTING_SLOPE_SATURATION,0,1,true,48
+LS_NER_2024_004,26.1445,91.7362,185,2024-08-04,06:00,Assam,Kamrup Metropolitan,SH-01,MEDIUM,3200,UNPLANNED_HILL_CUTTING,1,2,false,6
+LS_NER_2024_005,23.7271,92.7176,1132,2024-08-22,14:20,Mizoram,Aizawl,NH-54,HIGH,15000,CONTINUOUS_INFILTRATION,0,3,true,30

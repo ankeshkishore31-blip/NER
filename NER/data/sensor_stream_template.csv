@@ -1,0 +1,6 @@
+timestamp_utc,node_id,latitude,longitude,sensor_health,battery_voltage_v,rainfall_10min_mm,cumulative_rainfall_24h_mm,soil_moisture_vol_pct,pore_water_pressure_kpa,tilt_x_deg,tilt_y_deg,tilt_magnitude_deg,acceleration_rms_g,ambient_temp_c
+2024-06-15T00:00:00Z,NODE_EKH_NH06_01,25.5785,91.8930,OK,3.95,2.4,48.2,55.4,12.5,1.24,-0.45,1.32,0.012,21.5
+2024-06-15T00:10:00Z,NODE_EKH_NH06_01,25.5785,91.8930,OK,3.94,5.8,54.0,61.2,16.8,1.35,-0.50,1.44,0.018,21.2
+2024-06-15T00:20:00Z,NODE_EKH_NH06_01,25.5785,91.8930,OK,3.94,12.0,66.0,72.8,24.3,1.82,-0.75,1.97,0.045,20.8
+2024-06-15T00:30:00Z,NODE_EKH_NH06_01,25.5785,91.8930,ALERT,3.93,18.5,84.5,84.1,38.9,3.15,-1.20,3.37,0.112,20.5
+2024-06-15T00:40:00Z,NODE_EKH_NH06_01,25.5785,91.8930,CRITICAL,3.91,24.2,108.7,92.6,56.2,5.84,-2.40,6.31,0.285,20.1

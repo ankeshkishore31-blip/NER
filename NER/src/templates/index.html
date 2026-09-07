@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MDoNER AI Landslide Early Warning & Risk Monitoring System (NER)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet Heatmap Plugin -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            },
+            hazard: {
+              red: '#ef4444',
+              orange: '#f97316',
+              yellow: '#eab308',
+              green: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    #map { height: 560px; width: 100%; border-radius: 0.75rem; z-index: 10; }
+    .glass-card { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .leaflet-popup-content-wrapper { background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 0.5rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+    .leaflet-popup-tip { background: #0f172a; }
+    @keyframes pulse-road {
+      0%, 100% { stroke-opacity: 1; stroke-width: 6; }
+      50% { stroke-opacity: 0.35; stroke-width: 9; }
+    }
+    .road-blocked-anim {
+      animation: pulse-road 1.2s infinite ease-in-out;
+    }
+    @keyframes radar-pulse {
+      0% { transform: scale(0.95); opacity: 0.3; }
+      50% { transform: scale(1.08); opacity: 0.6; }
+      100% { transform: scale(0.95); opacity: 0.3; }
+    }
+    .radar-pulse-anim {
+      animation: radar-pulse 3s infinite ease-in-out;
+    }
+    .map-hud {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(51, 65, 85, 0.8);
+      color: #94a3b8;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/30">
+          <i class="fa-solid fa-mountain text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">MDoNER AI Landslide Monitoring Platform</h1>
+            <span class="bg-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded border border-blue-500/30 font-semibold">PS-26001</span>
+            <span class="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> LOCALHOST LIVE
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">North Eastern Region (NER) Early Warning • Physics-Informed ML • Graph Isolation</p>
+        </div>
+      </div>
+
+      <!-- Quick Status Badges -->
+      <div class="flex items-center space-x-4 text-xs">
+        <div class="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+          <span class="text-slate-400">IoT Telemetry Nodes:</span>
+          <span class="text-emerald-400 font-bold ml-1" id="stat-sensors">12 Active</span>
+        </div>
+        <div class="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+          <span class="text-slate-400">Languages:</span>
+          <span class="text-cyan-400 font-bold ml-1">6 Active (NER)</span>
+        </div>
+        <a href="/docs" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-code text-blue-400"></i>
+          <span>FastAPI Docs</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+    <!-- KPI Summary Row -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-slate-400 uppercase font-semibold">Physics Factor of Safety (FS)</div>
+          <div class="text-2xl font-black mt-1" id="kpi-fs">0.78</div>
+          <div class="text-xs font-semibold text-rose-400 mt-0.5" id="kpi-fs-desc">FS &lt; 1.0 (Critical Shearing)</div>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-slate-400 uppercase font-semibold">Hybrid Failure Probability</div>
+          <div class="text-2xl font-black mt-1 text-orange-400" id="kpi-prob">88.4%</div>
+          <div class="text-xs text-slate-400 mt-0.5">PINN (60%) + XGBoost (40%)</div>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-chart-line"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-slate-400 uppercase font-semibold">Graph Isolation Index (VII)</div>
+          <div class="text-2xl font-black mt-1 text-purple-400" id="kpi-vii">0.72</div>
+          <div class="text-xs text-purple-300 mt-0.5" id="kpi-severed-villages">2 Villages Isolated</div>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-diagram-project"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-slate-400 uppercase font-semibold">Edge TinyML Latency</div>
+          <div class="text-2xl font-black mt-1 text-cyan-400">12.4 ms</div>
+          <div class="text-xs text-emerald-400 mt-0.5">Offline-Ready (INT8 TFLite)</div>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-mobile-screen"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: 3D / 2D GIS Map & Live Sensor Telemetry -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- GIS Map Panel (2 Cols) -->
+      <div class="lg:col-span-2 glass-card rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <!-- Header and Legend -->
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <h2 class="font-bold text-sm tracking-wide uppercase text-slate-100 flex items-center gap-1.5">
+                <i class="fa-solid fa-earth-asia text-blue-400"></i> Dynamic GIS Digital Twin &amp; Road Network
+              </h2>
+            </div>
+            
+            <!-- Quick Map Legend -->
+            <div class="flex items-center space-x-3 text-xs bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-800">
+              <span class="inline-flex items-center gap-1 text-slate-300">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span> Landslide
+              </span>
+              <span class="inline-flex items-center gap-1 text-slate-300">
+                <span class="w-3 h-1 bg-emerald-400 rounded-full"></span> Road Open
+              </span>
+              <span class="inline-flex items-center gap-1 text-slate-300">
+                <span class="w-3 h-1 bg-rose-500 rounded-full road-blocked-anim"></span> Blocked
+              </span>
+              <span class="inline-flex items-center gap-1 text-slate-300">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> IoT Station
+              </span>
+            </div>
+          </div>
+
+          <!-- Dynamic Corridor Fly-To Shortcuts -->
+          <div class="flex flex-wrap items-center gap-1.5 mb-3 bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 text-xs">
+            <span class="text-slate-400 font-semibold text-[11px] mr-1"><i class="fa-solid fa-crosshairs text-blue-400 mr-1"></i>Corridors:</span>
+            <button onclick="flyToCorridor('dibang')" class="bg-slate-800 hover:bg-blue-600/30 text-cyan-300 hover:text-cyan-200 border border-slate-700 px-2.5 py-1 rounded-md transition font-medium">
+              🏔️ Dibang Valley (Arunachal)
+            </button>
+            <button onclick="flyToCorridor('nh06')" class="bg-slate-800 hover:bg-blue-600/30 text-amber-300 hover:text-amber-200 border border-slate-700 px-2.5 py-1 rounded-md transition font-medium">
+              🌧️ NH-06 Lifeline (Meghalaya)
+            </button>
+            <button onclick="flyToCorridor('nh10')" class="bg-slate-800 hover:bg-blue-600/30 text-emerald-300 hover:text-emerald-200 border border-slate-700 px-2.5 py-1 rounded-md transition font-medium">
+              ⛰️ NH-10 Teesta (Sikkim)
+            </button>
+            <button onclick="flyToCorridor('nh29')" class="bg-slate-800 hover:bg-blue-600/30 text-purple-300 hover:text-purple-200 border border-slate-700 px-2.5 py-1 rounded-md transition font-medium">
+              🌲 NH-29 Ridge (Nagaland)
+            </button>
+            <button onclick="flyToCorridor('ner')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md transition font-medium ml-auto">
+              🗺️ Regional View
+            </button>
+          </div>
+
+          <!-- Dynamic Layers & Controls Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3 text-xs bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+            <!-- Base Maps -->
+            <div class="flex items-center space-x-2">
+              <span class="text-slate-400 font-semibold">Basemap:</span>
+              <select id="map-basemap-select" onchange="switchBasemap(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs">
+                <option value="satellite">🛰️ Satellite (Esri Photorealistic)</option>
+                <option value="topo" selected>⛰️ 3D Topographic (OpenTopoMap)</option>
+                <option value="dark">⬛ Dark Tactical (CartoDB)</option>
+                <option value="osm">🛣️ Standard Roads (OSM)</option>
+              </select>
+            </div>
+
+            <!-- Overlays -->
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="layer-heatmap-toggle" checked onchange="toggleHeatmapLayer(this.checked)" class="rounded bg-slate-800 border-slate-700 text-blue-500 accent-blue-500">
+                <span class="font-medium text-orange-400">🔥 Dynamic Risk Heatmap</span>
+              </label>
+
+              <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="layer-roads-toggle" checked onchange="toggleRoadsLayer(this.checked)" class="rounded bg-slate-800 border-slate-700 text-blue-500 accent-blue-500">
+                <span class="font-medium text-emerald-400">🛣️ Arterial Roads</span>
+              </label>
+
+              <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="layer-radar-toggle" checked onchange="toggleWeatherRadar(this.checked)" class="rounded bg-slate-800 border-slate-700 text-blue-500 accent-blue-500">
+                <span class="font-medium text-cyan-400">🌧️ Doppler Rain Radar</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Relative Map Container with HUD -->
+          <div class="relative">
+            <div id="map" class="shadow-2xl"></div>
+
+            <!-- Floating Coordinates & Elevation HUD -->
+            <div id="map-coords-hud" class="map-hud absolute bottom-3 left-3 z-[400] flex items-center gap-2">
+              <span><i class="fa-solid fa-location-crosshairs text-blue-400"></i> Cursor:</span>
+              <span id="hud-latlon" class="font-mono text-slate-200">28.5321°N, 95.8142°E</span>
+              <span class="text-slate-600">|</span>
+              <span id="hud-elev" class="font-mono text-emerald-400">1,496m ASL (Dibang Gorge)</span>
+            </div>
+
+            <!-- Quick Map Action Floating Button -->
+            <div class="absolute top-3 right-3 z-[400] flex gap-1.5">
+              <button onclick="toggleMapFullscreen()" title="Toggle Fullscreen" class="bg-slate-900/90 hover:bg-slate-800 text-slate-200 p-2 rounded-lg border border-slate-700 shadow-lg transition">
+                <i class="fa-solid fa-expand"></i>
+              </button>
+              <button onclick="refreshMapData()" title="Reload GIS Points" class="bg-slate-900/90 hover:bg-slate-800 text-slate-200 p-2 rounded-lg border border-slate-700 shadow-lg transition">
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map Footer Note -->
+        <div class="mt-3 flex flex-wrap items-center justify-between text-xs text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+          <div>
+            <i class="fa-solid fa-circle-info text-blue-400 mr-1"></i>
+            Click on any <b>Highway Segment</b> directly on the map to trigger simulated landslide cuts and view graph network severance!
+          </div>
+          <div class="font-mono text-slate-300">
+            Active Blocked Arteries: <b id="map-blocked-count" class="text-emerald-400 font-bold">0</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live IoT Telemetry Panel (1 Col) -->
+      <div class="glass-card rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-wave-square text-emerald-400"></i>
+              <h2 class="font-bold text-sm tracking-wide uppercase text-slate-200">Live IoT Slope Telemetry</h2>
+            </div>
+            <span class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono">10s POLL</span>
+          </div>
+
+          <div class="space-y-3">
+            <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>Pore Water Pressure:</span>
+                <span id="tele-pore" class="font-bold text-slate-200">38.5 kPa</span>
+              </div>
+              <div class="w-full bg-slate-800 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div id="tele-pore-bar" class="bg-orange-500 h-full w-[65%] transition-all duration-500"></div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>Triaxial Slope Tilt (\(\theta\)):</span>
+                <span id="tele-tilt" class="font-bold text-slate-200">4.2° (Creep)</span>
+              </div>
+              <div class="w-full bg-slate-800 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div id="tele-tilt-bar" class="bg-rose-500 h-full w-[70%] transition-all duration-500"></div>
+              </div>
+            </div>
+
+            <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>Rainfall Intensity:</span>
+                <span id="tele-rain" class="font-bold text-slate-200">32.0 mm/hr</span>
+              </div>
+              <div class="w-full bg-slate-800 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div id="tele-rain-bar" class="bg-blue-500 h-full w-[80%] transition-all duration-500"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mini Time-series Canvas -->
+          <div class="mt-4">
+            <div class="text-xs font-semibold text-slate-400 mb-1">Pore Pressure (kPa) &amp; Rainfall Trend</div>
+            <canvas id="telemetryChart" height="130"></canvas>
+          </div>
+        </div>
+
+        <button onclick="triggerSimulatedSurge()" class="mt-4 w-full bg-amber-600/80 hover:bg-amber-600 text-white text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-cloud-showers-heavy"></i> Simulate Cloudburst Sensor Surge
+        </button>
+      </div>
+    </div>
+
+    <!-- Section: The "Secret Sauce" Graph Theory Isolation Engine Simulator -->
+    <div class="glass-card rounded-xl p-6 border-purple-500/30">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="bg-purple-500/20 text-purple-400 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-wider border border-purple-500/30">
+              MDoNER Secret Sauce
+            </span>
+            <h2 class="text-base font-bold text-white">Graph Theory Village Isolation Index (VII) &amp; Evacuation Priority Matrix</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            Simulates mountain road collapse. Calculates instantaneous network severance to tertiary hospitals (\(d_{G'}(v, \mathcal{H})\)) and prioritizes cut-off habitations for District Commissioners.
+          </p>
+        </div>
+
+        <!-- Simulation Controls -->
+        <div class="flex items-center gap-2">
+          <select id="road-cut-select" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-2">
+            <option value="RD_ML_03">Wahrew-Pynursla Ridge Road (NH-06 Corridor)</option>
+            <option value="RD_AR_02">Etalin-Dibang Gorge Highway (Dibang Valley)</option>
+            <option value="RD_ML_05">NH-06 South Arterial Bridge (Meghalaya)</option>
+            <option value="RD_AR_04">Lower Dibang Pass Suspension Bridge</option>
+          </select>
+          <button onclick="toggleRoadBlockade()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-lg shadow-purple-600/30">
+            <i class="fa-solid fa-road-barrier mr-1"></i> Trigger Landslide Cut
+          </button>
+          <button onclick="resetRoadNetwork()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-700">
+            Reset Network
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Severed Roads Banner -->
+      <div id="severed-roads-banner" class="mb-4 bg-purple-950/40 border border-purple-800/60 p-3 rounded-lg text-xs flex items-center justify-between">
+        <div class="flex items-center gap-2 text-purple-200">
+          <i class="fa-solid fa-circle-exclamation text-purple-400 text-sm"></i>
+          <span>Active Severed Arteries: <b id="active-severed-text" class="text-rose-400">None (Network Fully Connected)</b></span>
+        </div>
+        <span class="text-purple-300 font-mono" id="network-topology-status">Topology Status: 100% Reachable</span>
+      </div>
+
+      <!-- Dynamic Evacuation Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Evac Rank</th>
+              <th class="py-3 px-4">Village Name</th>
+              <th class="py-3 px-4">Total Population</th>
+              <th class="py-3 px-4">Vulnerable (Elderly/Infants)</th>
+              <th class="py-3 px-4">Baseline Hospital Dist</th>
+              <th class="py-3 px-4">Post-Collapse Dist</th>
+              <th class="py-3 px-4">Isolation Index (VII)</th>
+              <th class="py-3 px-4">Mandated Action</th>
+            </tr>
+          </thead>
+          <tbody id="evac-table-body" class="divide-y divide-slate-800">
+            <!-- Dynamic Rows Injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section: Physics-Informed ML Simulator & Multilingual CAP Alert Console -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Physics-Informed Neural Network (PINN) Interactive Tester -->
+      <div class="glass-card rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-atom text-blue-400"></i>
+            <h2 class="text-base font-bold text-white">PINN Slope Stability Predictor (Infinite Slope Model)</h2>
+          </div>
+          <span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded font-mono">Differentiable Physics</span>
+        </div>
+
+        <div class="space-y-4 text-xs">
+          <div>
+            <div class="flex justify-between mb-1">
+              <label class="font-medium text-slate-300">Slope Angle (\(\theta\)): <b id="val-slope" class="text-blue-400">42.5°</b></label>
+            </div>
+            <input id="slider-slope" type="range" min="10" max="65" step="0.5" value="42.5" oninput="runPINNPredict()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+          </div>
+
+          <div>
+            <div class="flex justify-between mb-1">
+              <label class="font-medium text-slate-300">Soil Cohesion (\(c'\)): <b id="val-cohesion" class="text-blue-400">15.0 kPa</b></label>
+            </div>
+            <input id="slider-cohesion" type="range" min="2" max="40" step="0.5" value="15.0" oninput="runPINNPredict()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+          </div>
+
+          <div>
+            <div class="flex justify-between mb-1">
+              <label class="font-medium text-slate-300">Internal Friction Angle (\(\phi'\)): <b id="val-friction" class="text-blue-400">28.0°</b></label>
+            </div>
+            <input id="slider-friction" type="range" min="10" max="45" step="0.5" value="28.0" oninput="runPINNPredict()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+          </div>
+
+          <div>
+            <div class="flex justify-between mb-1">
+              <label class="font-medium text-slate-300">Groundwater Table Saturation Ratio (\(h_w/z\)): <b id="val-water" class="text-blue-400">0.85</b></label>
+            </div>
+            <input id="slider-water" type="range" min="0" max="1" step="0.05" value="0.85" oninput="runPINNPredict()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+          </div>
+
+          <div>
+            <div class="flex justify-between mb-1">
+              <label class="font-medium text-slate-300">3-Day Cumulative Antecedent Rainfall: <b id="val-rain" class="text-blue-400">185 mm</b></label>
+            </div>
+            <input id="slider-rain" type="range" min="10" max="400" step="5" value="185" oninput="runPINNPredict()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+          </div>
+        </div>
+
+        <!-- PINN Output Display -->
+        <div class="mt-6 bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs text-slate-400 font-semibold uppercase">Computed Factor of Safety (FS)</div>
+              <div class="text-3xl font-black text-rose-500 mt-1" id="pinn-res-fs">0.782</div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-slate-400 font-semibold uppercase">Hazard Severity</div>
+              <span id="pinn-badge" class="inline-block px-3 py-1 mt-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                RED_CRITICAL
+              </span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mt-3" id="pinn-action-text">
+            IMMEDIATE EVACUATION MANDATED: Resisting shear strength exceeded by gravitational driving forces.
+          </p>
+        </div>
+      </div>
+
+      <!-- Multilingual CAP v1.2 & CDAC Alert Dispatch Console -->
+      <div class="glass-card rounded-xl p-6 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-bullhorn text-rose-400"></i>
+              <h2 class="text-base font-bold text-white">Multilingual Alert &amp; CAP v1.2 Dispatcher</h2>
+            </div>
+            <span class="text-xs bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded font-mono">NDMA Sachet Compliant</span>
+          </div>
+
+          <!-- Language Selector -->
+          <div class="mb-4">
+            <label class="block text-xs text-slate-400 mb-1">Target Language (NER Local Dialect):</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="selectLang('en')" id="btn-lang-en" class="lang-btn bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">English</button>
+              <button onclick="selectLang('as')" id="btn-lang-as" class="lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs">অসমীয়া (Assam)</button>
+              <button onclick="selectLang('kha')" id="btn-lang-kha" class="lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs">Khasi (Meghalaya)</button>
+              <button onclick="selectLang('brx')" id="btn-lang-brx" class="lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs">बड़ो (Bodo)</button>
+              <button onclick="selectLang('bn')" id="btn-lang-bn" class="lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs">বাংলা (Bengali)</button>
+              <button onclick="selectLang('hi')" id="btn-lang-hi" class="lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs">हिन्दी (Hindi)</button>
+            </div>
+          </div>
+
+          <!-- Alert Content Preview -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-3 text-xs space-y-2">
+            <div>
+              <span class="text-slate-400 font-semibold">Headline:</span>
+              <p id="alert-headline" class="text-slate-100 font-bold mt-0.5">LANDSLIDE EARLY WARNING: High Mass Movement Probability</p>
+            </div>
+            <div>
+              <span class="text-slate-400 font-semibold">Broadcast Instruction:</span>
+              <p id="alert-instruction" class="text-slate-300 mt-0.5">Immediate evacuation from steep cut-slopes to designated community shelters.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2 mt-4">
+          <div class="flex gap-2">
+            <button onclick="testSpeechAlert()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 rounded-lg border border-slate-700 flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-volume-high text-cyan-400"></i> Play Voice TTS Audio
+            </button>
+            <button onclick="showCAPModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 rounded-lg border border-slate-700 flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-code text-purple-400"></i> View CAP XML
+            </button>
+          </div>
+          <button onclick="dispatchAlertToAll()" class="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2.5 rounded-lg transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-paper-plane"></i> Dispatch Multi-Channel Emergency Alert (C-DAC SMS + IVR)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Computer Vision Crack Displacement Analyzer -->
+    <div class="glass-card rounded-xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-camera text-cyan-400"></i>
+          <h2 class="text-base font-bold text-white">Citizen Ground Crack Displacement (Optical Flow Vision Engine)</h2>
+        </div>
+        <span class="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded font-mono">OpenCV Homography + Farneback</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Simulate Temporal Fissure Movement:</label>
+          <input id="slider-crack" type="range" min="1" max="35" step="0.5" value="14.5" oninput="runCrackAnalysis()" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+          <div class="text-xs text-slate-400 mt-1">Ground Fissure Displacement: <b id="val-crack" class="text-cyan-400">14.5 mm</b></div>
+        </div>
+        <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-xs">
+          <span class="text-slate-400">Structural Threat:</span>
+          <div id="crack-severity-badge" class="font-bold text-orange-400 text-sm mt-0.5">ACTIVE CREEP DETECTED</div>
+        </div>
+        <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-xs">
+          <span class="text-slate-400">Optical Flow Interpretation:</span>
+          <div id="crack-desc" class="text-slate-300 mt-0.5">Progressive shearing along tension crack zone.</div>
+        </div>
+    </div>
+
+    <!-- Section: Trained AI Landslide Instance Segmentation (YOLOv8-Seg) -->
+    <div class="glass-card rounded-xl p-6 border border-blue-500/30">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="bg-blue-500/20 text-blue-400 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-wider border border-blue-500/30">
+              Trained Model
+            </span>
+            <h2 class="text-base font-bold text-white">YOLOv8-Seg Landslide &amp; Debris-Flow Instance Segmentation</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            Trained on your uploaded Roboflow dataset (2,285 remote sensing satellite &amp; aerial images). Detects pixel-level polygon masks for <b>Debris-flow</b> and <b>landslide</b> scars.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="prevTestImage()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition">
+            <i class="fa-solid fa-chevron-left mr-1"></i> Prev Image
+          </button>
+          <button onclick="nextTestImage()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition">
+            Next Image <i class="fa-solid fa-chevron-right ml-1"></i>
+          </button>
+          <button onclick="runSegmentation()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-lg shadow-blue-500/30 transition">
+            <i class="fa-solid fa-play mr-1"></i> Run AI Inference
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+        <!-- Visualizer Area -->
+        <div class="md:col-span-2 bg-slate-950/80 rounded-xl p-3 border border-slate-800 flex flex-col items-center justify-center min-h-[340px]">
+          <img id="seg-result-img" src="" alt="Landslide Segmentation" class="max-h-[380px] w-auto rounded-lg shadow-lg object-contain hidden">
+          <div id="seg-loading" class="text-center text-xs text-slate-400 py-12">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-blue-400 mb-2"></i>
+            <p>Loading test image and running YOLOv8 segmentation inference...</p>
+          </div>
+        </div>
+
+        <!-- Detection Metrics & Classes -->
+        <div class="space-y-3 text-xs">
+          <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-0.5">Tested Sample File:</span>
+            <span id="seg-filename" class="font-mono text-cyan-400 font-bold break-all">Loading...</span>
+          </div>
+          <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-0.5">Detected Landslide Scars:</span>
+            <span id="seg-count" class="text-lg font-black text-rose-400">0</span>
+          </div>
+          <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-1">Detections &amp; Confidence:</span>
+            <div id="seg-detections-list" class="space-y-1 max-h-32 overflow-y-auto">
+              <!-- Detection pills injected by JS -->
+            </div>
+          </div>
+          <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-400">
+            <i class="fa-solid fa-microchip text-blue-400 mr-1"></i>
+            Model weights: <code class="text-slate-200">models/landslide_yolov8_seg_best.pt</code> (6.7 MB, TinyML / Mobile ready)
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- CAP XML Modal -->
+  <div id="cap-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-file-code text-purple-400"></i> OASIS Common Alerting Protocol (CAP v1.2) Payload
+        </h3>
+        <button onclick="closeCAPModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <textarea id="cap-xml-content" readonly class="w-full h-80 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 focus:outline-none"></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeCAPModal()" class="bg-slate-800 text-slate-300 text-xs px-4 py-2 rounded-lg">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bg-slate-900 border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500">
+    Designed for the Ministry of Development of North Eastern Region (MDoNER), Government of India • Problem Statement ID: 26001
+  </footer>
+
+  <script>
+    let map;
+    let currentBasemap;
+    let heatmapLayer;
+    let roadsLayerGroup;
+    let radarLayerGroup;
+    let markersLayerGroup;
+    let telemetryChart;
+    let activeBlockedRoads = [];
+    let currentLanguage = 'en';
+    let langData = {};
+
+    // 1. Basemap Tile Configurations
+    const BASEMAPS = {
+      satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18,
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+      }),
+      topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        maxZoom: 17,
+        attribution: 'Map data: &copy; OpenStreetMap, SRTM | OpenTopoMap'
+      }),
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+      }),
+      osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      })
+    };
+
+    // 2. Arterial Highway Vectors
+    const ARTERIAL_ROADS = [
+      {
+        id: "RD_ML_05",
+        name: "NH-06 South Arterial Bridge & Ridge (Meghalaya)",
+        corridor: "nh06",
+        risk: 0.85,
+        coords: [
+          [25.6601, 91.9125],
+          [25.5900, 91.9050],
+          [25.5788, 91.8933],
+          [25.4800, 91.9000],
+          [25.3082, 91.9002]
+        ]
+      },
+      {
+        id: "RD_ML_03",
+        name: "Wahrew-Pynursla Ridge Road (NH-06 Lifeline)",
+        corridor: "nh06",
+        risk: 0.92,
+        coords: [
+          [25.3082, 91.9002],
+          [25.2600, 91.8950],
+          [25.2300, 91.8900]
+        ]
+      },
+      {
+        id: "RD_ML_01",
+        name: "Dawki Border Connection (Wahrew-Dawki)",
+        corridor: "nh06",
+        risk: 0.45,
+        coords: [
+          [25.2300, 91.8900],
+          [25.2016, 91.9500],
+          [25.1834, 92.0197]
+        ]
+      },
+      {
+        id: "RD_ML_07",
+        name: "NH-06 Northbound Bypass (Umiam-Umsning-Nongpoh)",
+        corridor: "nh06",
+        risk: 0.30,
+        coords: [
+          [25.6601, 91.9125],
+          [25.7523, 91.8891],
+          [25.8200, 91.8800],
+          [25.9015, 91.8791]
+        ]
+      },
+      {
+        id: "RD_AR_01",
+        name: "Anini-Etalin Trans-Arunachal Highway",
+        corridor: "dibang",
+        risk: 0.88,
+        coords: [
+          [28.7900, 95.9000],
+          [28.7300, 95.8800],
+          [28.6600, 95.8600],
+          [28.6100, 95.8400]
+        ]
+      },
+      {
+        id: "RD_AR_02",
+        name: "Etalin-Dibang Gorge Highway (Steep Cut-Slope)",
+        corridor: "dibang",
+        risk: 0.94,
+        coords: [
+          [28.6100, 95.8400],
+          [28.5800, 95.8200]
+        ]
+      },
+      {
+        id: "RD_AR_04",
+        name: "Lower Dibang Pass Suspension Bridge & Roing Link",
+        corridor: "dibang",
+        risk: 0.72,
+        coords: [
+          [28.5800, 95.8200],
+          [28.4500, 95.8800],
+          [28.3200, 95.9600],
+          [28.2100, 95.8900],
+          [28.1400, 95.8300]
+        ]
+      },
+      {
+        id: "RD_SK_01",
+        name: "NH-10 Sevoke-Teesta-Gangtok Lifeline (Sikkim)",
+        corridor: "nh10",
+        risk: 0.91,
+        coords: [
+          [26.8800, 88.4700],
+          [26.9300, 88.4600],
+          [27.0600, 88.5000],
+          [27.1800, 88.5300],
+          [27.2300, 88.5000],
+          [27.3389, 88.6065]
+        ]
+      },
+      {
+        id: "RD_NL_01",
+        name: "NH-29 Dimapur-Kohima Arterial Pass (Nagaland)",
+        corridor: "nh29",
+        risk: 0.79,
+        coords: [
+          [25.9100, 93.7300],
+          [25.7900, 93.7700],
+          [25.7500, 93.8600],
+          [25.6751, 94.1086]
+        ]
+      }
+    ];
+
+    // 3. Baseline Regional Heatmap Data Points [Lat, Lon, Intensity]
+    const BASE_HEATMAP_POINTS = [
+      // Dibang Valley (Arunachal Pradesh)
+      [28.79, 95.90, 0.85],
+      [28.61, 95.84, 0.95],
+      [28.58, 95.82, 0.92],
+      [28.53, 95.81, 0.88],
+      [28.32, 95.96, 0.75],
+      [28.45, 95.88, 0.80],
+
+      // East Khasi Hills & Cherrapunji / Pynursla (Meghalaya)
+      [25.5788, 91.8933, 0.90],
+      [25.3082, 91.9002, 0.88],
+      [25.2800, 91.7300, 0.98], // Mawsynram hyper-rain zone
+      [25.2700, 91.7200, 0.96], // Cherrapunji
+      [25.2300, 91.8900, 0.85],
+      [25.1834, 92.0197, 0.70],
+      [25.6601, 91.9125, 0.78],
+
+      // Sikkim NH-10 Teesta Corridor
+      [27.3389, 88.6065, 0.96],
+      [27.1800, 88.5300, 0.90],
+      [27.0600, 88.5000, 0.88],
+
+      // Nagaland Kohima NH-29
+      [25.6751, 94.1086, 0.85],
+      [25.7500, 93.8600, 0.75],
+
+      // Mizoram Aizawl
+      [23.7271, 92.7176, 0.82],
+
+      // Assam Kamrup Hills
+      [26.1445, 91.7362, 0.65],
+      [26.1800, 91.7700, 0.60]
+    ];
+
+    // 4. Initialize Dynamic Leaflet Map
+    function initMap() {
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: true
+      }).setView([26.5, 93.5], 7);
+
+      // Default Basemap: Topographic
+      currentBasemap = BASEMAPS.topo;
+      currentBasemap.addTo(map);
+
+      // Layer Groups for Dynamic Overlays
+      roadsLayerGroup = L.layerGroup().addTo(map);
+      markersLayerGroup = L.layerGroup().addTo(map);
+      radarLayerGroup = L.layerGroup().addTo(map);
+
+      // Initialize Heatmap Layer
+      initHeatmap();
+
+      // Render Dynamic Arterial Roads
+      renderRoadLayers();
+
+      // Render Doppler Radar Storm Simulation
+      initRadarSimulation();
+
+      // Load Historical Landslides & Hospitals
+      loadGISData();
+
+      // Mousemove Coordinates & Elevation HUD
+      map.on('mousemove', onMapMouseMove);
+    }
+
+    // Basemap Switcher
+    function switchBasemap(type) {
+      if (currentBasemap) map.removeLayer(currentBasemap);
+      currentBasemap = BASEMAPS[type] || BASEMAPS.topo;
+      currentBasemap.addTo(map);
+      currentBasemap.bringToBack();
+    }
+
+    // Dynamic Heatmap Initialization
+    function initHeatmap(multiplier = 1.0) {
+      if (heatmapLayer) map.removeLayer(heatmapLayer);
+
+      const scaledPoints = BASE_HEATMAP_POINTS.map(pt => [
+        pt[0],
+        pt[1],
+        Math.min(pt[2] * multiplier, 1.0)
+      ]);
+
+      heatmapLayer = L.heatLayer(scaledPoints, {
+        radius: 28,
+        blur: 20,
+        maxZoom: 14,
+        max: 1.0,
+        gradient: {
+          0.2: '#22c55e',
+          0.4: '#eab308',
+          0.7: '#f97316',
+          0.9: '#ef4444',
+          1.0: '#7f1d1d'
+        }
+      });
+
+      if (document.getElementById('layer-heatmap-toggle').checked) {
+        heatmapLayer.addTo(map);
+      }
+    }
+
+    function toggleHeatmapLayer(visible) {
+      if (!heatmapLayer) return;
+      if (visible) {
+        heatmapLayer.addTo(map);
+      } else {
+        map.removeLayer(heatmapLayer);
+      }
+    }
+
+    // Dynamic Road Network Vector Rendering
+    function renderRoadLayers() {
+      roadsLayerGroup.clearLayers();
+
+      ARTERIAL_ROADS.forEach(road => {
+        const isBlocked = activeBlockedRoads.includes(road.id);
+
+        const polyline = L.polyline(road.coords, {
+          color: isBlocked ? '#ef4444' : '#10b981',
+          weight: isBlocked ? 7 : 5,
+          opacity: 0.9,
+          dashArray: isBlocked ? '8, 8' : null,
+          className: isBlocked ? 'road-blocked-anim' : ''
+        }).addTo(roadsLayerGroup);
+
+        const popupContent = `
+          <div style="font-family: sans-serif; min-width: 220px; padding: 2px;">
+            <div style="font-weight: bold; font-size: 13px; color: ${isBlocked ? '#f87171' : '#34d399'}; margin-bottom: 4px;">
+              ${isBlocked ? '🚨 ROAD SEVERED (LANDSLIDE)' : '🛣️ ROAD ARTERY OPERATIONAL'}
+            </div>
+            <div style="font-size: 12px; font-weight: 600; color: #f1f5f9; margin-bottom: 6px;">
+              ${road.name}
+            </div>
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+              <span>Corridor: <b>${road.corridor.toUpperCase()}</b></span> | 
+              <span>Vulnerability: <b>${(road.risk * 100).toFixed(0)}%</b></span>
+            </div>
+            <button onclick="toggleRoadFromMap('${road.id}')" style="
+              width: 100%;
+              background: ${isBlocked ? '#10b981' : '#ef4444'};
+              color: white;
+              font-weight: bold;
+              font-size: 11px;
+              padding: 6px 10px;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            ">
+              ${isBlocked ? '✅ Clear Debris & Reopen Road' : '🚨 Simulate Landslide Blockade'}
+            </button>
+          </div>
+        `;
+
+        polyline.bindPopup(popupContent);
+      });
+
+      document.getElementById('map-blocked-count').innerText = activeBlockedRoads.length;
+      document.getElementById('map-blocked-count').className = activeBlockedRoads.length > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold";
+    }
+
+    function toggleRoadFromMap(roadId) {
+      if (activeBlockedRoads.includes(roadId)) {
+        activeBlockedRoads = activeBlockedRoads.filter(id => id !== roadId);
+      } else {
+        activeBlockedRoads.push(roadId);
+      }
+      renderRoadLayers();
+      updateRoadStatusBanner();
+      loadIsolationTable();
+    }
+
+    function toggleRoadsLayer(visible) {
+      if (visible) {
+        roadsLayerGroup.addTo(map);
+      } else {
+        map.removeLayer(roadsLayerGroup);
+      }
+    }
+
+    // Dynamic Doppler Weather Radar Simulation Layer
+    function initRadarSimulation() {
+      radarLayerGroup.clearLayers();
+
+      // Rain cells simulating active Doppler radar over Meghalaya and Arunachal
+      const stormCells = [
+        { lat: 25.35, lon: 91.80, radius: 28000, color: '#38bdf8', opacity: 0.25 },
+        { lat: 25.45, lon: 91.95, radius: 18000, color: '#e0f2fe', opacity: 0.35 },
+        { lat: 28.65, lon: 95.80, radius: 32000, color: '#38bdf8', opacity: 0.30 },
+        { lat: 28.50, lon: 95.85, radius: 19000, color: '#93c5fd', opacity: 0.40 },
+        { lat: 27.25, lon: 88.55, radius: 22000, color: '#38bdf8', opacity: 0.30 }
+      ];
+
+      stormCells.forEach(cell => {
+        L.circle([cell.lat, cell.lon], {
+          radius: cell.radius,
+          color: cell.color,
+          fillColor: cell.color,
+          fillOpacity: cell.opacity,
+          weight: 1.5,
+          className: 'radar-pulse-anim'
+        }).addTo(radarLayerGroup);
+      });
+    }
+
+    function toggleWeatherRadar(visible) {
+      if (visible) {
+        radarLayerGroup.addTo(map);
+      } else {
+        map.removeLayer(radarLayerGroup);
+      }
+    }
+
+    // Corridor Fly-To Camera Controller
+    function flyToCorridor(corridor) {
+      const targets = {
+        dibang: { center: [28.55, 95.85], zoom: 10 },
+        nh06:   { center: [25.48, 91.90], zoom: 10 },
+        nh10:   { center: [27.15, 88.52], zoom: 11 },
+        nh29:   { center: [25.75, 93.95], zoom: 11 },
+        ner:    { center: [26.40, 93.20], zoom: 7 }
+      };
+
+      const t = targets[corridor] || targets.ner;
+      map.flyTo(t.center, t.zoom, {
+        duration: 1.6,
+        easeLinearity: 0.25
+      });
+    }
+
+    // Dynamic HUD Coordinates on Mousemove
+    function onMapMouseMove(e) {
+      const lat = e.latlng.lat.toFixed(4);
+      const lon = e.latlng.lng.toFixed(4);
+      document.getElementById('hud-latlon').innerText = `${lat}°N, ${lon}°E`;
+
+      // Approximate terrain elevation heuristic based on lat/lon
+      let elev = 650;
+      if (e.latlng.lat > 28.0) elev = Math.round(1800 + (e.latlng.lat - 28.0) * 1200);
+      else if (e.latlng.lat > 25.0 && e.latlng.lat < 26.0 && e.latlng.lng < 92.5) elev = Math.round(1450 + Math.sin(e.latlng.lng) * 350);
+      else if (e.latlng.lng < 89.0) elev = 1650;
+      else if (e.latlng.lat > 26.0 && e.latlng.lat < 27.0) elev = 140;
+
+      document.getElementById('hud-elev').innerText = `${elev.toLocaleString()}m ASL`;
+    }
+
+    // Fullscreen Toggle
+    function toggleMapFullscreen() {
+      const mapEl = document.getElementById('map');
+      if (!document.fullscreenElement) {
+        mapEl.requestFullscreen?.() || mapEl.webkitRequestFullscreen?.();
+      } else {
+        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      }
+    }
+
+    function refreshMapData() {
+      loadGISData();
+      renderRoadLayers();
+      initHeatmap();
+    }
+
+    // 3. Initialize Live Telemetry Chart
+    function initChart() {
+      const ctx = document.getElementById('telemetryChart').getContext('2d');
+      const labels = ['-50m', '-40m', '-30m', '-20m', '-10m', 'Now'];
+      telemetryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Pore Pressure (kPa)',
+              data: [18, 22, 26, 32, 36, 38.5],
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249, 115, 22, 0.1)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Rainfall (mm/hr)',
+              data: [8, 14, 19, 25, 29, 32],
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 9 } } },
+            y: { ticks: { color: '#64748b', font: { size: 9 } } }
+          }
+        }
+      });
+    }
+
+    // 4. Run PINN Physics Predictor
+    async function runPINNPredict() {
+      const slope = parseFloat(document.getElementById('slider-slope').value);
+      const cohesion = parseFloat(document.getElementById('slider-cohesion').value);
+      const friction = parseFloat(document.getElementById('slider-friction').value);
+      const water = parseFloat(document.getElementById('slider-water').value);
+      const rain = parseFloat(document.getElementById('slider-rain').value);
+
+      document.getElementById('val-slope').innerText = slope + '°';
+      document.getElementById('val-cohesion').innerText = cohesion + ' kPa';
+      document.getElementById('val-friction').innerText = friction + '°';
+      document.getElementById('val-water').innerText = water;
+      document.getElementById('val-rain').innerText = rain + ' mm';
+
+      try {
+        const res = await fetch('/api/v1/predict/realtime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slope_deg: slope,
+            cohesion_kpa: cohesion,
+            friction_deg: friction,
+            soil_depth_m: 2.5,
+            water_table_ratio: water,
+            rainfall_cumulative_3d_mm: rain
+          })
+        });
+
+        const data = await res.json();
+        document.getElementById('pinn-res-fs').innerText = data.factor_of_safety;
+        document.getElementById('kpi-fs').innerText = data.factor_of_safety;
+        document.getElementById('kpi-prob').innerText = (data.probability_of_failure * 100).toFixed(1) + '%';
+        document.getElementById('pinn-action-text').innerText = data.action_recommendation;
+
+        const badge = document.getElementById('pinn-badge');
+        badge.innerText = data.hazard_level;
+        badge.style.borderColor = data.badge_color;
+        badge.style.color = data.badge_color;
+
+        if (data.factor_of_safety < 1.0) {
+          document.getElementById('kpi-fs-desc').innerText = "FS < 1.0 (Critical Shearing)";
+          document.getElementById('kpi-fs-desc').className = "text-xs font-semibold text-rose-400 mt-0.5";
+        } else {
+          document.getElementById('kpi-fs-desc').innerText = "FS >= 1.0 (Mechanically Stable)";
+          document.getElementById('kpi-fs-desc').className = "text-xs font-semibold text-emerald-400 mt-0.5";
+        }
+      } catch (err) {
+        console.error("PINN prediction error", err);
+      }
+    }
+
+    // 5. Graph Theory Isolation Index Simulator
+    async function loadIsolationTable() {
+      try {
+        const res = await fetch('/api/v1/graph/isolation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blocked_road_ids: activeBlockedRoads })
+        });
+        const data = await res.json();
+
+        const tbody = document.getElementById('evac-table-body');
+        tbody.innerHTML = '';
+
+        let severedCount = 0;
+        let maxVII = 0.0;
+
+        data.forEach((row, idx) => {
+          if (row.is_severed) severedCount++;
+          if (row.vii_score > maxVII) maxVII = row.vii_score;
+
+          const tr = document.createElement('tr');
+          tr.className = row.is_severed ? 'bg-rose-950/20' : '';
+          tr.innerHTML = `
+            <td class="py-3 px-4 font-bold text-slate-200">#${idx + 1}</td>
+            <td class="py-3 px-4 font-semibold text-slate-100">${row.village_name}</td>
+            <td class="py-3 px-4">${row.population.toLocaleString()}</td>
+            <td class="py-3 px-4 text-orange-400">${row.vulnerable_citizens}</td>
+            <td class="py-3 px-4">${row.baseline_km} km</td>
+            <td class="py-3 px-4 font-bold ${row.is_severed ? 'text-rose-400' : 'text-slate-300'}">${row.post_collapse_km}</td>
+            <td class="py-3 px-4 font-black text-purple-400">${row.vii_score}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold ${
+                row.vii_score >= 0.65 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-blue-500/20 text-blue-400'
+              }">${row.status_badge}</span>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        document.getElementById('kpi-vii').innerText = maxVII.toFixed(2);
+        document.getElementById('kpi-severed-villages').innerText = `${severedCount} Settlements Isolated`;
+
+      } catch (err) {
+        console.error("Graph isolation error", err);
+      }
+    }
+
+    function toggleRoadBlockade() {
+      const selected = document.getElementById('road-cut-select').value;
+      if (!activeBlockedRoads.includes(selected)) {
+        activeBlockedRoads.push(selected);
+      }
+      updateRoadStatusBanner();
+      loadIsolationTable();
+    }
+
+    function resetRoadNetwork() {
+      activeBlockedRoads = [];
+      updateRoadStatusBanner();
+      loadIsolationTable();
+    }
+
+    function updateRoadStatusBanner() {
+      const textEl = document.getElementById('active-severed-text');
+      const statEl = document.getElementById('network-topology-status');
+      if (activeBlockedRoads.length === 0) {
+        textEl.innerText = "None (Network Fully Connected)";
+        textEl.className = "text-emerald-400 font-bold";
+        statEl.innerText = "Topology Status: 100% Reachable";
+      } else {
+        textEl.innerText = activeBlockedRoads.join(", ") + " (BLOCKED)";
+        textEl.className = "text-rose-400 font-bold";
+        statEl.innerText = `Topology Status: Disrupted (${activeBlockedRoads.length} Cut-Edges)`;
+      }
+    }
+
+    // 6. Multilingual Alert Functions
+    async function loadAlertTemplates() {
+      const res = await fetch('/api/v1/alerts/multilingual');
+      langData = await res.json();
+      selectLang('en');
+    }
+
+    function selectLang(code) {
+      currentLanguage = code;
+      document.querySelectorAll('.lang-btn').forEach(b => {
+        b.className = 'lang-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded text-xs';
+      });
+      const activeBtn = document.getElementById(`btn-lang-${code}`);
+      if (activeBtn) activeBtn.className = 'lang-btn bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold';
+
+      if (langData[code]) {
+        document.getElementById('alert-headline').innerText = langData[code].headline;
+        document.getElementById('alert-instruction').innerText = langData[code].instruction;
+      }
+    }
+
+    function testSpeechAlert() {
+      if ('speechSynthesis' in window) {
+        const text = document.getElementById('alert-instruction').innerText;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 0.95;
+        window.speechSynthesis.speak(utter);
+      } else {
+        alert("Speech synthesis is not supported on this browser.");
+      }
+    }
+
+    async function showCAPModal() {
+      const res = await fetch('/api/v1/alerts/cap-xml');
+      const xml = await res.text();
+      document.getElementById('cap-xml-content').value = xml;
+      document.getElementById('cap-modal').classList.remove('hidden');
+    }
+
+    function closeCAPModal() {
+      document.getElementById('cap-modal').classList.add('hidden');
+    }
+
+    async function dispatchAlertToAll() {
+      const res = await fetch('/api/v1/alerts/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ severity: 'EXTREME', region: 'NER_CORRIDOR' })
+      });
+      const data = await res.json();
+      alert(`✅ Emergency Alert Dispatched!\nDispatched SMS Count: ${data.sms_count}\nIVR Calls Queued: ${data.ivr_count}\nNDMA CAP XML: Registered`);
+    }
+
+    // 7. Computer Vision Crack Displacement
+    async function runCrackAnalysis() {
+      const val = parseFloat(document.getElementById('slider-crack').value);
+      document.getElementById('val-crack').innerText = val + ' mm';
+
+      const res = await fetch('/api/v1/predict/crack-displacement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulated_movement_mm: val })
+      });
+      const data = await res.json();
+
+      const badge = document.getElementById('crack-severity-badge');
+      badge.innerText = data.severity === 'RED' ? 'CRITICAL ACCELERATION DETECTED' : (data.severity === 'ORANGE' ? 'ACTIVE CREEP DETECTED' : 'MICRO-FISSURE STABLE');
+      badge.className = `font-bold text-sm mt-0.5 ${data.severity === 'RED' ? 'text-rose-400' : (data.severity === 'ORANGE' ? 'text-orange-400' : 'text-emerald-400')}`;
+      document.getElementById('crack-desc').innerText = data.interpretation;
+    }
+
+    // 8. Telemetry Simulation Surge
+    function triggerSimulatedSurge() {
+      document.getElementById('tele-pore').innerText = "58.4 kPa (CRITICAL)";
+      document.getElementById('tele-pore-bar').className = "bg-rose-500 h-full w-[95%] transition-all duration-500";
+      document.getElementById('tele-tilt').innerText = "6.8° (FAILURE CREEP)";
+      document.getElementById('tele-rain').innerText = "75.0 mm/hr (CLOUDBURST)";
+      document.getElementById('slider-water').value = "0.95";
+      document.getElementById('slider-rain').value = "280";
+      runPINNPredict();
+    }
+
+    // 9. YOLOv8 Landslide Instance Segmentation
+    let currentSampleIdx = 0;
+
+    async function runSegmentation(sampleIdx = null) {
+      if (sampleIdx !== null) currentSampleIdx = sampleIdx;
+      const loadingEl = document.getElementById('seg-loading');
+      const imgEl = document.getElementById('seg-result-img');
+      loadingEl.classList.remove('hidden');
+      imgEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/v1/predict/landslide-segmentation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sample_idx: currentSampleIdx })
+        });
+        const data = await res.json();
+
+        document.getElementById('seg-filename').innerText = data.filename;
+        document.getElementById('seg-count').innerText = `${data.detections_count} Region(s) Identified`;
+
+        const listEl = document.getElementById('seg-detections-list');
+        listEl.innerHTML = '';
+        if (data.detections && data.detections.length > 0) {
+          data.detections.forEach(d => {
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center bg-slate-800/80 px-2 py-1 rounded text-slate-200';
+            item.innerHTML = `<span><b class="text-rose-400">${d.class_name}</b></span> <span class="text-emerald-400 font-mono font-bold">${(d.confidence * 100).toFixed(1)}% Conf</span>`;
+            listEl.appendChild(item);
+          });
+        } else {
+          listEl.innerHTML = '<span class="text-slate-500">No major landslide scar in frame</span>';
+        }
+
+        imgEl.src = data.image_base64;
+        imgEl.classList.remove('hidden');
+        loadingEl.classList.add('hidden');
+      } catch (err) {
+        console.error("Segmentation error:", err);
+        loadingEl.innerHTML = `<span class="text-rose-400">Error running segmentation: ${err.message}</span>`;
+      }
+    }
+
+    function prevTestImage() {
+      if (currentSampleIdx > 0) currentSampleIdx--;
+      runSegmentation();
+    }
+
+    function nextTestImage() {
+      currentSampleIdx++;
+      runSegmentation();
+    }
+
+    // Window Onload
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      initChart();
+      runPINNPredict();
+      loadIsolationTable();
+      loadAlertTemplates();
+      runCrackAnalysis();
+      runSegmentation();
+    });
+  </script>
+</body>
+</html>

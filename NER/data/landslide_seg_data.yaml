@@ -1,0 +1,9 @@
+path: C:/Users/ankes/OneDrive/Desktop/Landslide
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 2
+names:
+  0: Debris-flow
+  1: landslide
